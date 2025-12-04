@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Welcome</title>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: url("245.jpg") center/cover no-repeat;
+    }
+
+    #msg {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.85);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-family: sans-serif;
+      font-size: 20px;
+      z-index: 10;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+      z-index: 30;
+    }
+
+    .vertical-controls {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      z-index: 30;
+    }
+
+    .btn {
+      width: 75px;
+      height: 75px;
+      background: rgba(255,255,255,0.8);
+      border-radius: 15px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 35px;
+      font-family: sans-serif;
+      user-select: none;
+      border: 2px solid #888;
+      touch-action: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="msg">Use touch or keyboard to move!</div>
+  <canvas id="game"></canvas>
+
+  <!-- TOUCH CONTROLS -->
+  <div class="controls">
+    <div class="btn" data-dir="left">←</div>
+    <div class="btn" data-dir="right">→</div>
+  </div>
+
+  <div class="vertical-controls">
+    <div class="btn" data-dir="up">↑</div>
+    <div class="btn" data-dir="down">↓</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    function resize() {
+      canvas.width = innerWidth;
+      canvas.height = innerHeight;
+    }
+    resize();
+    addEventListener("resize", resize);
+
+    // Images
+    const playerImg = new Image();
+    playerImg.src = "player.png";
+
+    const objectImg = new Image();
+    objectImg.src = "object.jpeg";
+
+    // Player object
+    const player = {
+      x: 0,
+      y: 0,
+      size: 100,
+      speed: 10
+    };
+
+    const hazards = [];
+    let keys = {};
+    let gameOver = false;
+
+    // KEYBOARD SUPPORT
+    addEventListener("keydown", e => keys[e.key] = true);
+    addEventListener("keyup", e => keys[e.key] = false);
+
+    // --- TOUCH BUTTONS FIXED ---
+    const btns = document.querySelectorAll(".btn");
+
+    btns.forEach(btn => {
+  const dir = btn.dataset.dir;
+
+  function press() {
+    if (dir === "left") keys["ArrowLeft"] = true;
+    if (dir === "right") keys["ArrowRight"] = true;
+    if (dir === "up") keys["ArrowUp"] = true;
+    if (dir === "down") keys["ArrowDown"] = true;
+  }
+
+  function release() {
+    if (dir === "left") keys["ArrowLeft"] = false;
+    if (dir === "right") keys["ArrowRight"] = false;
+    if (dir === "up") keys["ArrowUp"] = false;
+    if (dir === "down") keys["ArrowDown"] = false;
+  }
+
+  // ---- PC MOUSE ----
+  btn.addEventListener("mousedown", press);
+  btn.addEventListener("mouseup", release);
+  btn.addEventListener("mouseleave", release);
+
+  // ---- MOBILE TOUCH ----
+  btn.addEventListener("touchstart", e => {
+    e.preventDefault();
+    press();
+  }, { passive: false });
+
+  btn.addEventListener("touchend", e => {
+    e.preventDefault();
+    release();
+  }, { passive: false });
+});
+
+    // Hazards
+    function spawnHazard() {
+      hazards.push({
+        x: Math.random() * (canvas.width - 80),
+        y: -100,
+        size: 80,
+        speed: 4 + Math.random() * 3
+      });
+    }
+    setInterval(spawnHazard, 650);
+
+    // Start when image loads
+    playerImg.onload = () => {
+      player.x = canvas.width / 2 - player.size / 2;
+      player.y = canvas.height - player.size - 40;
+      requestAnimationFrame(loop);
+    };
+
+    // Movement logic
+    function updatePlayer() {
+      if (keys["ArrowLeft"] && player.x > 0) player.x -= player.speed;
+      if (keys["ArrowRight"] && player.x < canvas.width - player.size) player.x += player.speed;
+      if (keys["ArrowUp"] && player.y > 0) player.y -= player.speed;
+      if (keys["ArrowDown"] && player.y < canvas.height - player.size) player.y += player.speed;
+    }
+
+    function updateHazards() {
+      for (let h of hazards) h.y += h.speed;
+    }
+
+    function drawPlayer() {
+      ctx.drawImage(playerImg, player.x, player.y, player.size, player.size);
+    }
+
+    function drawHazards() {
+      for (let h of hazards) {
+        ctx.drawImage(objectImg, h.x, h.y, h.size, h.size);
+      }
+    }
+
+    function checkCollision() {
+      for (let h of hazards) {
+        const dx = (player.x + player.size / 2) - (h.x + h.size / 2);
+        const dy = (player.y + player.size / 2) - (h.y + h.size / 2);
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < (player.size / 2 + h.size / 2)) {
+          endGame();
+        }
+      }
+    }
+
+    function endGame() {
+      gameOver = true;
+      document.getElementById("msg").innerText = "Game Over! Refresh to retry.";
+    }
+
+    function loop() {
+      if (gameOver) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      updatePlayer();
+      updateHazards();
+      drawPlayer();
+      drawHazards();
+      checkCollision();
+
+      requestAnimationFrame(loop);
+    }
+  </script>
+
+</body>
+</html>
+
